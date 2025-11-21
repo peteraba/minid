@@ -1,0 +1,9 @@
+*
+
+!cmd
+!.gitignore
+!go.mod
+!go.sum
+!Makefile
+!minid.go
+!minid_test.go
