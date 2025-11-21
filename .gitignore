@@ -8,3 +8,6 @@
 !minid.go
 !minid_test.go
 !README.md
+!build
+!build/.gitkeep
+!!build/minid

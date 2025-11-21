@@ -1,7 +1,10 @@
 package minid
 
 import (
+	"fmt"
+	"math/rand/v2"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -149,5 +152,153 @@ func TestRandomUnix(t *testing.T) {
 		if len(s.String()) != 9 {
 			t.Errorf("Sequence length is not 9: %s (got %d)", s.String(), len(s.String()))
 		}
+	}
+}
+
+func TestStringToDiffOverflow(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		shouldPanic bool
+	}{
+		{
+			name:        "valid with many z's",
+			input:       "zzzzzzzzzz",
+			shouldPanic: false,
+		},
+		{
+			name:        "overflow with many z's",
+			input:       "zzzzzzzzzzz",
+			shouldPanic: true,
+		},
+		{
+			name:        "valid with many a's",
+			input:       "aaaaaaaaaa",
+			shouldPanic: false,
+		},
+		{
+			name:        "overflow with too many a's",
+			input:       "aaaaaaaaaaa",
+			shouldPanic: true,
+		},
+		{
+			name:        "valid with many 1's",
+			input:       "11111111111",
+			shouldPanic: false,
+		},
+		{
+			name:        "overflow with too many 1's",
+			input:       "111111111111",
+			shouldPanic: true,
+		},
+		{
+			name:        "valid max value",
+			input:       "zzzzzz",
+			shouldPanic: false,
+		},
+		{
+			name:        "valid normal value",
+			input:       "111111",
+			shouldPanic: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.shouldPanic {
+				require.Panics(t, func() {
+					stringToDiff(tt.input)
+				}, "stringToDiff should panic for input %q", tt.input)
+			} else {
+				require.NotPanics(t, func() {
+					stringToDiff(tt.input)
+				}, "stringToDiff should not panic for input %q", tt.input)
+			}
+		})
+	}
+}
+
+func TestBytesAndFromBytes(t *testing.T) {
+	tests := []string{
+		"",
+		"1",
+		"z",
+		"11",
+		"1z",
+		"zz",
+		"111",
+		"zzz",
+		"1111",
+		"zzzz",
+		"11111",
+		"123",
+	}
+
+	// Add some random valid strings
+	letters := []rune("123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
+	for i := range 100 {
+		l := i % 20
+		sb := strings.Builder{}
+		for j := 0; j < l; j++ {
+			sb.WriteRune(letters[rand.IntN(len(letters))])
+		}
+		tests = append(tests, sb.String())
+	}
+
+	for _, s := range tests {
+		t.Run(fmt.Sprintf("len-%d-%s", len(s), s), func(t *testing.T) {
+			m := Minid(s)
+			b := m.Bytes()
+
+			// Verify determinism
+			b2 := m.Bytes()
+			assert.Equal(t, b, b2)
+
+			// Verify round trip
+			m2, err := FromBytes(b)
+			require.NoError(t, err)
+			assert.Equal(t, m, m2)
+
+			// Verify efficiency (roughly)
+			// Length should be ceil(len(s) * 6 / 8)
+			expectedLen := (len(s)*6 + 7) / 8
+			assert.Equal(t, expectedLen, len(b), "Byte length mismatch for %s", s)
+		})
+	}
+}
+
+func BenchmarkRandom4(b *testing.B) {
+	for b.Loop() {
+		Random(1, 4)
+	}
+}
+
+func BenchmarkRandom6(b *testing.B) {
+	for b.Loop() {
+		Random(1, 6)
+	}
+}
+
+func BenchmarkRandomUnix(b *testing.B) {
+	for b.Loop() {
+		RandomUnix(1, 6)
+	}
+}
+
+func BenchmarkRandomUnixMilli(b *testing.B) {
+	for b.Loop() {
+		RandomUnixMilli(1, 6)
+	}
+}
+
+func BenchmarkRandomUnixMicro(b *testing.B) {
+	for b.Loop() {
+		RandomUnixMicro(1, 6)
+	}
+}
+
+func BenchmarkRandomNano(b *testing.B) {
+	for b.Loop() {
+		RandomNano(1, 6)
 	}
 }

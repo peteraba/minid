@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"math"
 	"math/rand/v2"
-	"sort"
+	"slices"
 	"strings"
 	"time"
 )
@@ -67,12 +67,119 @@ func (m Minid) String() string {
 
 // Bytes returns the ID as a byte slice.
 func (m Minid) Bytes() []byte {
-	return nil
+	s := string(m)
+	n := len(s)
+	if n == 0 {
+		return []byte{}
+	}
+
+	// Calculate byte length
+	// Pack 6 bits per char.
+	// n chars -> ceil(n * 6 / 8) bytes
+	numBytes := (n*6 + 7) / 8
+	b := make([]byte, numBytes)
+
+	var bitBuf uint64
+	var bitCount int
+	byteIdx := 0
+
+	for _, r := range s {
+		var idx uint64
+		if int(r) < len(lettersMap) {
+			val := lettersMap[r]
+			if val >= 0 {
+				idx = uint64(val)
+			} else {
+				// Invalid character, treat as 0 ('1')
+				idx = 0
+			}
+		} else {
+			idx = 0
+		}
+
+		// Add 6 bits to buffer
+		bitBuf = (bitBuf << 6) | idx
+		bitCount += 6
+
+		for bitCount >= 8 {
+			// Extract top 8 bits
+			bitCount -= 8
+			b[byteIdx] = byte(bitBuf >> bitCount)
+			byteIdx++
+			// Mask to keep only valid bits in buf
+			bitBuf &= (1 << bitCount) - 1
+		}
+	}
+
+	// Handle remaining bits
+	if bitCount > 0 {
+		// We have bitCount bits at the bottom of bitBuf.
+		// Shift them to the top of the byte.
+		b[byteIdx] = byte(bitBuf << (8 - bitCount))
+
+		// Handle ambiguity padding.
+		// Ambiguity arises when len(b) % 3 == 0.
+		// If len(b) % 3 == 0, it could be 3-char case (with slack) or 4-char case (full).
+		// If 3-char case (slack): bitCount should be 2 (18 bits used = 2 full + 2 bits).
+		// Remaining bits = 6.
+		if (byteIdx+1)%3 == 0 {
+			// We must pad the remaining 6 bits with 1s.
+			remainingBits := 8 - bitCount
+			mask := byte((1 << remainingBits) - 1)
+			b[byteIdx] |= mask
+		}
+	}
+
+	return b
 }
 
 // FromBytes reconstructs a Minid from its byte representation.
 func FromBytes(b []byte) (Minid, error) {
-	return "", nil
+	nBytes := len(b)
+	if nBytes == 0 {
+		return "", nil
+	}
+
+	nChars := (nBytes * 8) / 6
+
+	if nBytes%3 == 0 {
+		// Check for padding in the last byte
+		// In 3-char case, last byte has 6 bits of padding (1s).
+		// 1s are in the LSB positions.
+		if b[nBytes-1]&0x3F == 0x3F {
+			nChars--
+		}
+	}
+
+	sb := strings.Builder{}
+	sb.Grow(nChars)
+
+	var bitBuf uint64
+	var bitCount int
+
+	// We process byte by byte, but stop when we have extracted nChars
+	charsExtracted := 0
+
+	for i := 0; i < nBytes && charsExtracted < nChars; i++ {
+		bitBuf = (bitBuf << 8) | uint64(b[i])
+		bitCount += 8
+
+		for bitCount >= 6 && charsExtracted < nChars {
+			// Extract top 6 bits
+			val := (bitBuf >> (bitCount - 6)) & 0x3F
+			bitCount -= 6
+
+			if val >= uint64(len(letters)) {
+				return "", fmt.Errorf("invalid character index: %d", val)
+			}
+			sb.WriteByte(byte(letters[val]))
+			charsExtracted++
+		}
+		// Keep remaining bits in bitBuf
+		bitBuf &= (1 << bitCount) - 1
+	}
+
+	return Minid(sb.String()), nil
 }
 
 // Minids is a slice of Minid.
@@ -97,18 +204,28 @@ func (m Minids) Print() {
 
 // Sort sorts the IDs lexicographically.
 func (m Minids) Sort() {
-	sort.Slice(m, func(i, j int) bool {
-		return m[i] < m[j]
-	})
+	slices.Sort(m)
 }
 
 // stringToDiff converts a minid-string to a diff.
 func stringToDiff(s string) uint64 {
+	// Calculate maximum safe length: largest n where base^n <= math.MaxUint64 + 1
+	// We add 1 to account for the fact that we need to round up
+	maxSafeLength := int(math.Ceil(math.Log(float64(math.MaxUint64)+1) / math.Log(float64(base))))
+	if len(s) > maxSafeLength {
+		panic(fmt.Errorf("string %q (length %d) exceeds maximum safe length %d for uint64 conversion", s, len(s), maxSafeLength))
+	}
+
 	num := uint64(0)
 	for _, c := range s {
 		var index uint64
 		if int(c) < len(lettersMap) && lettersMap[c] != -1 {
 			index = uint64(lettersMap[c])
+		}
+		// Check for overflow before multiplication
+		// num*base + index would overflow if num > (math.MaxUint64 - index) / base
+		if num > (math.MaxUint64-index)/base {
+			panic(fmt.Errorf("string %q would overflow uint64 when converted to diff", s))
 		}
 		num = num*base + index
 	}

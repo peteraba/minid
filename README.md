@@ -1,8 +1,16 @@
 # minid
 
-A reasonably fast, (optionally) somewhat sortable, URL-safe and human-friendly ID generator for Go. Generate fully random IDs or time-based IDs with configurable precision (seconds, milliseconds, microseconds, or nanoseconds).
+[![godoc](http://img.shields.io/badge/godoc-reference-blue.svg?style=flat)](https://godoc.org/github.com/peteraba/minid) [![license](http://img.shields.io/badge/license-MIT-red.svg?style=flat)](https://raw.githubusercontent.com/peteraba/minid/main/LICENSE) 
+
+A reasonably fast, (optionally) somewhat sortable, URL-safe and human-friendly ID generator for Go, which can be used either as a CLI tool or a library.
+
+Generate fully random IDs or time-based IDs with configurable precision (seconds, milliseconds, microseconds, or nanoseconds).
 
 It can generate a number of IDs and the ones generated in one go will be unique, but there's no generic uniquness guarantees.
+
+It's best used for pre-generating a large number of IDs, for example to be used in spreadsheets such as Google Spreadsheets.
+
+That said, usually you want to use other tools such as [xid](https://github.com/rs/xid), [snowflake](https://github.com/bwmarrin/snowflake), [sonyflake](https://github.com/sony/sonyflake) or one of the [hundreds of others](https://github.com/topics/id-generator?l=go)
 
 ## Features
 
@@ -13,6 +21,26 @@ It can generate a number of IDs and the ones generated in one go will be unique,
 - **No Leading Numbers**: Random suffixes never start with 0, to prevent unintentional removal in some tools.
 - **CLI Tool**: Easy-to-use command-line interface
 - **Library**: Use as a Go package in your applications
+
+## ID Format
+
+Minid comes with a highly customizable format. By default it will generate a random 4-letter string. It can also prefix the random letters by a number of strings which represent time elapsed since 2025-01-01. For now this is hard coded, but could be easily modified if needed.
+
+Furthermore you can pick the kind of time you want to use which could have a big impact on sortability.
+
+Options are:
+- r: no sortabiliy, no timing.
+- s: seconds
+- m: milliseconds - This would allow you to generate dozens of IDs in a second and assume them to be more or less fully sortable.
+- u: microseconds - This would allow you to generate thousands of IDs in a second and assume them to be fully sortable
+- n: nanoseconds - With this option you can assume that all your IDs generated on a node to fully sortable as generating a minid takes much longer.
+
+Note: (Partially) sortable IDs change the default for the number of random characters to optimize for shorter IDs.
+
+## Database storage
+
+Minid IDs can be stored as byte slices or strings, up to you.
+
 
 ## Installation
 
