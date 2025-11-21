@@ -41,8 +41,16 @@ func main() {
 	case "s", "ms", "us", "ns":
 		randomType = RandomType(arg1)
 		randLength = 3
+	case "r", "":
 	default:
 		count, err = strconv.Atoi(arg1)
+		if err != nil {
+			os.Exit(1)
+		}
+	}
+
+	if len(args) > 1 {
+		count, err = strconv.Atoi(args[1])
 		if err != nil {
 			os.Exit(1)
 		}
