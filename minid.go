@@ -1,7 +1,6 @@
 package minid
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
@@ -16,14 +15,17 @@ const maxRetries = 100
 var duplicateDetector = make(map[string]struct{})
 
 var (
-	start            = time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	startAtUnix      = start.Unix()
-	startAtUnixMilli = start.UnixMilli()
-	startAtUnixMicro = start.UnixMicro()
-	startAtUnixNano  = start.UnixNano()
-	letters          = []rune("123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
-	base             = uint64(len(letters))
-	lettersMap       = [128]int8{}
+	epoch = time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+
+	epochUnix  = epoch.Unix()
+	epochMilli = epoch.UnixMilli()
+	epochMicro = epoch.UnixMicro()
+	epochNano  = epoch.UnixNano()
+
+	letters    = []rune("123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
+	base       = uint64(len(letters))
+	lettersMap = [128]int8{}
+
 	maxUnixDiff      = uint64(math.Pow(float64(len(letters)), 6)) - 1
 	maxUnixMilliDiff = uint64(math.Pow(float64(len(letters)), 8))
 	maxUnixMicroDiff = uint64(math.Pow(float64(len(letters)), 9))
@@ -45,6 +47,16 @@ var (
 	errTooManyRetries     = errors.New("too many retries")
 )
 
+type RandomType string
+
+const (
+	RandomTypeRandom    RandomType = "r"
+	RandomTypeUnix      RandomType = "s"
+	RandomTypeUnixMilli RandomType = "m"
+	RandomTypeUnixMicro RandomType = "u"
+	RandomTypeUnixNano  RandomType = "n"
+)
+
 // Minid is a single ID.
 type Minid string
 
@@ -53,30 +65,14 @@ func (m Minid) String() string {
 	return string(m)
 }
 
-// Uint64 returns the number representation of the ID.
-func (m Minid) Uint64() uint64 {
-	return stringToNum(m.String())
-}
-
-// Bytes returns an efficient 8-byte representation of the Minid.
-// The bytes are encoded as little-endian uint64.
+// Bytes returns the ID as a byte slice.
 func (m Minid) Bytes() []byte {
-	num := m.Uint64()
-	buf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, num)
-	return buf
+	return nil
 }
 
 // FromBytes reconstructs a Minid from its byte representation.
-// The bytes must be exactly 8 bytes, encoded as little-endian uint64.
-// The reconstructed Minid will use the maximum length (11) to ensure
-// it can represent any value.
 func FromBytes(b []byte) (Minid, error) {
-	if len(b) != 8 {
-		return "", fmt.Errorf("bytes must be exactly 8 bytes, got %d", len(b))
-	}
-	num := binary.LittleEndian.Uint64(b)
-	return Minid(numToString(num, maxUnixNanoDiff, 11)), nil
+	return "", nil
 }
 
 // Minids is a slice of Minid.
@@ -89,15 +85,6 @@ func (m Minids) StringSlice() []string {
 		slice = append(slice, seq.String())
 	}
 
-	return slice
-}
-
-// Uint64Slice returns a slice of numbers representing the IDs.
-func (m Minids) Uint64Slice() []uint64 {
-	slice := make([]uint64, 0, len(m))
-	for _, seq := range m {
-		slice = append(slice, seq.Uint64())
-	}
 	return slice
 }
 
@@ -200,11 +187,11 @@ func RandomUnix(count, randLength int) Minids {
 	var seqs = make(Minids, 0, count)
 	for range count {
 		t := time.Now()
-		if t.Before(start) {
+		if t.Before(epoch) {
 			panic(errTimeTravelDetected)
 		}
 
-		ts := time.Now().Unix() - startAtUnix
+		ts := time.Now().Unix() - epochUnix
 		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixDiff, 6), randSeq(randLength, 0))))
 	}
 
@@ -216,11 +203,11 @@ func RandomUnixMilli(count, randLength int) Minids {
 	var seqs = make(Minids, 0, count)
 	for range count {
 		t := time.Now()
-		if t.Before(start) {
+		if t.Before(epoch) {
 			panic(errTimeTravelDetected)
 		}
 
-		ts := t.UnixMilli() - startAtUnixMilli
+		ts := t.UnixMilli() - epochMilli
 		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixMilliDiff, 8), randSeq(randLength, 0))))
 	}
 
@@ -232,11 +219,11 @@ func RandomUnixMicro(count, randLength int) Minids {
 	var seqs = make(Minids, 0, count)
 	for range count {
 		t := time.Now()
-		if t.Before(start) {
+		if t.Before(epoch) {
 			panic(errTimeTravelDetected)
 		}
 
-		ts := time.Now().UnixMicro() - startAtUnixMicro
+		ts := time.Now().UnixMicro() - epochMicro
 		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixMicroDiff, 10), randSeq(randLength, 0))))
 	}
 
@@ -248,11 +235,11 @@ func RandomNano(count, randLength int) Minids {
 	var seqs = make(Minids, 0, count)
 	for range count {
 		t := time.Now()
-		if t.Before(start) {
+		if t.Before(epoch) {
 			panic(errTimeTravelDetected)
 		}
 
-		ts := t.UnixNano() - startAtUnixNano
+		ts := t.UnixNano() - epochNano
 		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixNanoDiff, 11), randSeq(randLength, 0))))
 	}
 

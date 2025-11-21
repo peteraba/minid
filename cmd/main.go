@@ -9,16 +9,6 @@ import (
 	"github.com/peteraba/minid"
 )
 
-type RandomType string
-
-const (
-	RandomTypeRandom    RandomType = "r"
-	RandomTypeUnix      RandomType = "s"
-	RandomTypeUnixMilli RandomType = "ms"
-	RandomTypeUnixMicro RandomType = "us"
-	RandomTypeUnixNano  RandomType = "ns"
-)
-
 func main() {
 	var err error
 
@@ -26,7 +16,7 @@ func main() {
 	randLengthShort := flag.Int("rl", 0, "Length of the random suffix (short)")
 	flag.Parse()
 
-	randomType := RandomTypeRandom
+	randomType := minid.RandomTypeRandom
 	count := 1
 	randLength := 4
 
@@ -39,7 +29,7 @@ func main() {
 
 	switch arg1 {
 	case "s", "ms", "us", "ns":
-		randomType = RandomType(arg1)
+		randomType = minid.RandomType(arg1)
 		randLength = 3
 	case "r", "":
 	default:
@@ -64,15 +54,15 @@ func main() {
 	}
 
 	switch randomType {
-	case RandomTypeRandom:
+	case minid.RandomTypeRandom:
 		minid.Random(count, randLength).Print()
-	case RandomTypeUnix:
+	case minid.RandomTypeUnix:
 		minid.RandomUnix(count, randLength).Print()
-	case RandomTypeUnixMilli:
+	case minid.RandomTypeUnixMilli:
 		minid.RandomUnixMilli(count, randLength).Print()
-	case RandomTypeUnixMicro:
+	case minid.RandomTypeUnixMicro:
 		minid.RandomUnixMicro(count, randLength).Print()
-	case RandomTypeUnixNano:
+	case minid.RandomTypeUnixNano:
 		minid.RandomNano(count, randLength).Print()
 
 	default:
