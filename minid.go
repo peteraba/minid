@@ -102,8 +102,8 @@ func (m Minids) Sort() {
 	})
 }
 
-// stringToNum converts a minid-string to a number.
-func stringToNum(s string) uint64 {
+// stringToDiff converts a minid-string to a diff.
+func stringToDiff(s string) uint64 {
 	num := uint64(0)
 	for _, c := range s {
 		var index uint64
@@ -115,8 +115,8 @@ func stringToNum(s string) uint64 {
 	return num
 }
 
-// numToString converts a number to a minid-string.
-func numToString(diff, maxDiff uint64, length int) string {
+// diffToString converts a diff to a minid-string.
+func diffToString(diff, maxDiff uint64, length int) string {
 	if diff > maxDiff {
 		panic(errDiffTooLarge)
 	}
@@ -192,7 +192,7 @@ func RandomUnix(count, randLength int) Minids {
 		}
 
 		ts := time.Now().Unix() - epochUnix
-		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixDiff, 6), randSeq(randLength, 0))))
+		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", diffToString(uint64(ts), maxUnixDiff, 6), randSeq(randLength, 0))))
 	}
 
 	return seqs
@@ -208,7 +208,7 @@ func RandomUnixMilli(count, randLength int) Minids {
 		}
 
 		ts := t.UnixMilli() - epochMilli
-		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixMilliDiff, 8), randSeq(randLength, 0))))
+		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", diffToString(uint64(ts), maxUnixMilliDiff, 8), randSeq(randLength, 0))))
 	}
 
 	return seqs
@@ -224,7 +224,7 @@ func RandomUnixMicro(count, randLength int) Minids {
 		}
 
 		ts := time.Now().UnixMicro() - epochMicro
-		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixMicroDiff, 10), randSeq(randLength, 0))))
+		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", diffToString(uint64(ts), maxUnixMicroDiff, 10), randSeq(randLength, 0))))
 	}
 
 	return seqs
@@ -240,7 +240,7 @@ func RandomNano(count, randLength int) Minids {
 		}
 
 		ts := t.UnixNano() - epochNano
-		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixNanoDiff, 11), randSeq(randLength, 0))))
+		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", diffToString(uint64(ts), maxUnixNanoDiff, 11), randSeq(randLength, 0))))
 	}
 
 	return seqs

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNumToStringAndStringToNum(t *testing.T) {
+func TestDiffToStringAndStringToDiff(t *testing.T) {
 	tests := []struct {
 		name    string
 		diff    uint64
@@ -91,10 +91,10 @@ func TestNumToStringAndStringToNum(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := numToString(tt.diff, tt.maxDiff, tt.length)
+			got := diffToString(tt.diff, tt.maxDiff, tt.length)
 			require.Len(t, got, tt.length)
 
-			back := stringToNum(got)
+			back := stringToDiff(got)
 
 			assert.Equal(t, tt.want, got)
 			assert.Equal(t, tt.diff, back)
@@ -108,7 +108,7 @@ func TestSortability(t *testing.T) {
 	atSeconds := uint64(1000)
 	for range 100 {
 		atSeconds += 10
-		seqs = append(seqs, numToString(atSeconds, maxUnixDiff, 6))
+		seqs = append(seqs, diffToString(atSeconds, maxUnixDiff, 6))
 	}
 
 	// Check if they are sorted lexicographically
