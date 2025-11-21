@@ -65,29 +65,18 @@ func main() {
 
 	switch randomType {
 	case RandomTypeRandom:
-		seqs := minid.Random(count, randLength)
-		printSeqs(seqs)
+		minid.Random(count, randLength).Print()
 	case RandomTypeUnix:
-		seqs := minid.RandomUnix(count, randLength)
-		printSeqs(seqs)
+		minid.RandomUnix(count, randLength).Print()
 	case RandomTypeUnixMilli:
-		seqs := minid.RandomUnixMilli(count, randLength)
-		printSeqs(seqs)
+		minid.RandomUnixMilli(count, randLength).Print()
 	case RandomTypeUnixMicro:
-		seqs := minid.RandomUnixMicro(count, randLength)
-		printSeqs(seqs)
+		minid.RandomUnixMicro(count, randLength).Print()
 	case RandomTypeUnixNano:
-		seqs := minid.RandomNano(count, randLength)
-		printSeqs(seqs)
+		minid.RandomNano(count, randLength).Print()
 
 	default:
 		fmt.Printf("Invalid random type: %s\n", randomType)
 		os.Exit(1)
-	}
-}
-
-func printSeqs(seqs []string) {
-	for _, seq := range seqs {
-		fmt.Println(seq)
 	}
 }

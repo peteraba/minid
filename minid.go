@@ -1,10 +1,12 @@
 package minid
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
 	"math/rand/v2"
+	"sort"
 	"strings"
 	"time"
 )
@@ -21,18 +23,112 @@ var (
 	startAtUnixNano  = start.UnixNano()
 	letters          = []rune("123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz")
 	base             = uint64(len(letters))
+	lettersMap       = [128]int8{}
 	maxUnixDiff      = uint64(math.Pow(float64(len(letters)), 6)) - 1
 	maxUnixMilliDiff = uint64(math.Pow(float64(len(letters)), 8))
 	maxUnixMicroDiff = uint64(math.Pow(float64(len(letters)), 9))
 	maxUnixNanoDiff  = uint64(math.MaxUint64)
 )
 
+func init() {
+	for i := range lettersMap {
+		lettersMap[i] = -1
+	}
+	for i, r := range letters {
+		lettersMap[r] = int8(i)
+	}
+}
+
 var (
-	errNegativeRelativeTimestamp              = errors.New("relative timestamp is negative")
-	errDiffTooLarge                           = errors.New("diff is too large")
-	errFailedToGenerateSequenceWithoutNumbers = errors.New("failed to generate a sequence without numbers")
+	errTimeTravelDetected = errors.New("the relative timestamp is negative")
+	errDiffTooLarge       = errors.New("time diff out of range")
+	errTooManyRetries     = errors.New("too many retries")
 )
 
+// Minid is a single ID.
+type Minid string
+
+// String returns the ID as a string.
+func (m Minid) String() string {
+	return string(m)
+}
+
+// Uint64 returns the number representation of the ID.
+func (m Minid) Uint64() uint64 {
+	return stringToNum(m.String())
+}
+
+// Bytes returns an efficient 8-byte representation of the Minid.
+// The bytes are encoded as little-endian uint64.
+func (m Minid) Bytes() []byte {
+	num := m.Uint64()
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, num)
+	return buf
+}
+
+// FromBytes reconstructs a Minid from its byte representation.
+// The bytes must be exactly 8 bytes, encoded as little-endian uint64.
+// The reconstructed Minid will use the maximum length (11) to ensure
+// it can represent any value.
+func FromBytes(b []byte) (Minid, error) {
+	if len(b) != 8 {
+		return "", fmt.Errorf("bytes must be exactly 8 bytes, got %d", len(b))
+	}
+	num := binary.LittleEndian.Uint64(b)
+	return Minid(numToString(num, maxUnixNanoDiff, 11)), nil
+}
+
+// Minids is a slice of Minid.
+type Minids []Minid
+
+// StringSlice returns a slice of strings representing the IDs.
+func (m Minids) StringSlice() []string {
+	slice := make([]string, 0, len(m))
+	for _, seq := range m {
+		slice = append(slice, seq.String())
+	}
+
+	return slice
+}
+
+// Uint64Slice returns a slice of numbers representing the IDs.
+func (m Minids) Uint64Slice() []uint64 {
+	slice := make([]uint64, 0, len(m))
+	for _, seq := range m {
+		slice = append(slice, seq.Uint64())
+	}
+	return slice
+}
+
+// Print prints the IDs to the console.
+func (m Minids) Print() {
+	for _, seq := range m {
+		fmt.Println(string(seq))
+	}
+}
+
+// Sort sorts the IDs lexicographically.
+func (m Minids) Sort() {
+	sort.Slice(m, func(i, j int) bool {
+		return m[i] < m[j]
+	})
+}
+
+// stringToNum converts a minid-string to a number.
+func stringToNum(s string) uint64 {
+	num := uint64(0)
+	for _, c := range s {
+		var index uint64
+		if int(c) < len(lettersMap) && lettersMap[c] != -1 {
+			index = uint64(lettersMap[c])
+		}
+		num = num*base + index
+	}
+	return num
+}
+
+// numToString converts a number to a minid-string.
 func numToString(diff, maxDiff uint64, length int) string {
 	if diff > maxDiff {
 		panic(errDiffTooLarge)
@@ -40,7 +136,7 @@ func numToString(diff, maxDiff uint64, length int) string {
 
 	var result []rune
 
-	// Generate base61 digits (little-endian)
+	// Generate minid-letters (little-endian)
 	for diff > 0 {
 		result = append(result, letters[diff%base])
 		diff /= base
@@ -51,7 +147,7 @@ func numToString(diff, maxDiff uint64, length int) string {
 		result = append(result, letters[0])
 	}
 
-	// Reverse the result to get big-endian
+	// Reverse the result to get minid-letters (big-endian)
 	for i, j := 0, len(result)-1; i < j; i, j = i+1, j-1 {
 		result[i], result[j] = result[j], result[i]
 	}
@@ -59,9 +155,10 @@ func numToString(diff, maxDiff uint64, length int) string {
 	return string(result)
 }
 
+// randSeq generates a random sequence of letters.
 func randSeq(n int, retryCount int) string {
 	if retryCount > maxRetries {
-		panic(errFailedToGenerateSequenceWithoutNumbers)
+		panic(errTooManyRetries)
 	}
 
 	reTry := true
@@ -88,70 +185,75 @@ func randSeq(n int, retryCount int) string {
 	return str
 }
 
-func Random(count, randLength int) []string {
-	var seqs = make([]string, 0, count)
+// Random generates random IDs.
+func Random(count, randLength int) Minids {
+	var seqs = make([]Minid, 0, count)
 	for range count {
-		seqs = append(seqs, randSeq(randLength, 0))
+		seqs = append(seqs, Minid(randSeq(randLength, 0)))
 	}
 
-	return seqs
+	return Minids(seqs)
 }
 
-func RandomUnix(count, randLength int) []string {
-	var seqs = make([]string, 0, count)
+// RandomUnix generates random IDs with Unix second precision.
+func RandomUnix(count, randLength int) Minids {
+	var seqs = make(Minids, 0, count)
 	for range count {
 		t := time.Now()
 		if t.Before(start) {
-			panic(errNegativeRelativeTimestamp)
+			panic(errTimeTravelDetected)
 		}
 
 		ts := time.Now().Unix() - startAtUnix
-		seqs = append(seqs, fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixDiff, 6), randSeq(randLength, 0)))
+		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixDiff, 6), randSeq(randLength, 0))))
 	}
 
 	return seqs
 }
 
-func RandomUnixMilli(count, randLength int) []string {
-	var seqs = make([]string, 0, count)
+// RandomUnixMilli generates random IDs with Unix millisecond precision.
+func RandomUnixMilli(count, randLength int) Minids {
+	var seqs = make(Minids, 0, count)
 	for range count {
 		t := time.Now()
 		if t.Before(start) {
-			panic(errNegativeRelativeTimestamp)
+			panic(errTimeTravelDetected)
 		}
 
 		ts := t.UnixMilli() - startAtUnixMilli
-		seqs = append(seqs, fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixMilliDiff, 8), randSeq(randLength, 0)))
+		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixMilliDiff, 8), randSeq(randLength, 0))))
 	}
 
 	return seqs
 }
 
-func RandomUnixMicro(count, randLength int) []string {
-	var seqs = make([]string, 0, count)
+// RandomUnixMicro generates random IDs with Unix microsecond precision.
+func RandomUnixMicro(count, randLength int) Minids {
+	var seqs = make(Minids, 0, count)
 	for range count {
 		t := time.Now()
 		if t.Before(start) {
-			panic(errNegativeRelativeTimestamp)
+			panic(errTimeTravelDetected)
 		}
 
 		ts := time.Now().UnixMicro() - startAtUnixMicro
-		seqs = append(seqs, fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixMicroDiff, 10), randSeq(randLength, 0)))
+		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixMicroDiff, 10), randSeq(randLength, 0))))
 	}
 
 	return seqs
 }
 
-func RandomNano(count, randLength int) []string {
-	var seqs = make([]string, 0, count)
+// RandomNano generates random IDs with Unix nanosecond precision.
+func RandomNano(count, randLength int) Minids {
+	var seqs = make(Minids, 0, count)
 	for range count {
 		t := time.Now()
 		if t.Before(start) {
-			panic(errNegativeRelativeTimestamp)
+			panic(errTimeTravelDetected)
 		}
 
 		ts := t.UnixNano() - startAtUnixNano
-		seqs = append(seqs, fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixNanoDiff, 11), randSeq(randLength, 0)))
+		seqs = append(seqs, Minid(fmt.Sprintf("%s%s", numToString(uint64(ts), maxUnixNanoDiff, 11), randSeq(randLength, 0))))
 	}
 
 	return seqs

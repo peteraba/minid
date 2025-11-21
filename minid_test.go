@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestNumToString(t *testing.T) {
+func TestNumToStringAndStringToNum(t *testing.T) {
 	tests := []struct {
 		name    string
 		diff    uint64
@@ -94,7 +94,10 @@ func TestNumToString(t *testing.T) {
 			got := numToString(tt.diff, tt.maxDiff, tt.length)
 			require.Len(t, got, tt.length)
 
+			back := stringToNum(got)
+
 			assert.Equal(t, tt.want, got)
+			assert.Equal(t, tt.diff, back)
 		})
 	}
 }
@@ -124,10 +127,10 @@ func TestRandom(t *testing.T) {
 
 	seen := make(map[string]struct{}, len(seqs))
 	for _, s := range seqs {
-		if _, exists := seen[s]; exists {
+		if _, exists := seen[s.String()]; exists {
 			t.Errorf("Duplicate value found in seqs: %s", s)
 		}
-		seen[s] = struct{}{}
+		seen[s.String()] = struct{}{}
 		if len(s) != 3 {
 			t.Errorf("Sequence length is not 3: %s (got %d)", s, len(s))
 		}
@@ -139,12 +142,143 @@ func TestRandomUnix(t *testing.T) {
 
 	seen := make(map[string]struct{}, len(seqs))
 	for _, s := range seqs {
-		if _, exists := seen[s]; exists {
-			t.Errorf("Duplicate value found in seqs: %s", s)
+		if _, exists := seen[s.String()]; exists {
+			t.Errorf("Duplicate value found in seqs: %s", s.String())
 		}
-		seen[s] = struct{}{}
-		if len(s) != 9 {
-			t.Errorf("Sequence length is not 9: %s (got %d)", s, len(s))
+		seen[s.String()] = struct{}{}
+		if len(s.String()) != 9 {
+			t.Errorf("Sequence length is not 9: %s (got %d)", s.String(), len(s.String()))
 		}
+	}
+}
+
+func TestBytes(t *testing.T) {
+	tests := []struct {
+		name    string
+		minid   Minid
+		wantLen int
+	}{
+		{
+			name:    "zero",
+			minid:   Minid("111111"),
+			wantLen: 8,
+		},
+		{
+			name:    "one",
+			minid:   Minid("111112"),
+			wantLen: 8,
+		},
+		{
+			name:    "random",
+			minid:   Minid("aB3x"),
+			wantLen: 8,
+		},
+		{
+			name:    "unix",
+			minid:   Minid("132f3bXSZ"),
+			wantLen: 8,
+		},
+		{
+			name:    "max unix",
+			minid:   Minid("zzzzzz"),
+			wantLen: 8,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bytes := tt.minid.Bytes()
+			require.Len(t, bytes, tt.wantLen, "Bytes() should return exactly 8 bytes")
+		})
+	}
+}
+
+func TestFromBytes(t *testing.T) {
+	tests := []struct {
+		name    string
+		minid   Minid
+		wantErr bool
+	}{
+		{
+			name:    "zero",
+			minid:   Minid("111111"),
+			wantErr: false,
+		},
+		{
+			name:    "one",
+			minid:   Minid("111112"),
+			wantErr: false,
+		},
+		{
+			name:    "random",
+			minid:   Minid("aB3x"),
+			wantErr: false,
+		},
+		{
+			name:    "unix",
+			minid:   Minid("132f3bXSZ"),
+			wantErr: false,
+		},
+		{
+			name:    "max unix",
+			minid:   Minid("zzzzzz"),
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bytes := tt.minid.Bytes()
+			decoded, err := FromBytes(bytes)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			// Verify the numeric value is preserved (even if string representation differs)
+			assert.Equal(t, tt.minid.Uint64(), decoded.Uint64(),
+				"Round-trip conversion should preserve numeric value")
+		})
+	}
+
+	// Test error cases
+	t.Run("invalid length - too short", func(t *testing.T) {
+		_, err := FromBytes([]byte{1, 2, 3})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "must be exactly 8 bytes")
+	})
+
+	t.Run("invalid length - too long", func(t *testing.T) {
+		_, err := FromBytes(make([]byte, 16))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "must be exactly 8 bytes")
+	})
+}
+
+func TestBytesRoundTrip(t *testing.T) {
+	// Test various Minid types to ensure round-trip works
+	testCases := []struct {
+		name  string
+		minid Minid
+	}{
+		{"random", Minid("aB3x")},
+		{"unix", RandomUnix(1, 3)[0]},
+		{"unixMilli", RandomUnixMilli(1, 3)[0]},
+		{"unixMicro", RandomUnixMicro(1, 3)[0]},
+		{"unixNano", RandomNano(1, 3)[0]},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			originalNum := tc.minid.Uint64()
+			bytes := tc.minid.Bytes()
+			decoded, err := FromBytes(bytes)
+
+			require.NoError(t, err)
+			assert.Equal(t, originalNum, decoded.Uint64(),
+				"Round-trip conversion should preserve numeric value")
+		})
 	}
 }
